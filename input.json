@@ -1,0 +1,14 @@
+[
+  {
+    "_id": "foobar",
+    "sex": "Female",
+    "age": 55,
+    "race": "Black",
+    "marital-status": "Divorced",
+    "education": "Assoc-acdm",
+    "native-country": "United-States",
+    "workclass": "Private",
+    "occupation": "Sales",
+    "salary-class": "<=50K"
+  }
+]
