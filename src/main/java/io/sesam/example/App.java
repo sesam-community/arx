@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class App {
+    static boolean debug = Boolean.parseBoolean(System.getenv("DEBUG"));
     static Logger log = LoggerFactory.getLogger(App.class);
 
     static class ArxTransformer {
@@ -143,6 +144,9 @@ public class App {
                 while (jr.hasNext()) {
                     // note that GSON will convert '55' to a double when we do it this way
                     Map<String,Object> input = new Gson().fromJson(jr, Map.class);
+                    if (debug) {
+                        log.info("Got input: {}", input);
+                    }
                     Map<String,Object> output = transformer.transform(input);
                     new Gson().toJson(output, Map.class, jw);
                 }
