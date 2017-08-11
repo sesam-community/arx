@@ -2,7 +2,19 @@
   {
     "_id": "foobar",
     "sex": "Female",
-    "age": 55,
+    "age": "55",
+    "race": "Black",
+    "marital-status": "Divorced",
+    "education": "Assoc-acdm",
+    "native-country": "United-States",
+    "workclass": "Private",
+    "occupation": "Sales",
+    "salary-class": "<=50K"
+  },
+  {
+    "_id": "foobar2",
+    "sex": "Male",
+    "age": "29",
     "race": "Black",
     "marital-status": "Divorced",
     "education": "Assoc-acdm",
@@ -11,4 +23,5 @@
     "occupation": "Sales",
     "salary-class": "<=50K"
   }
+]
 ]

@@ -5,6 +5,7 @@ import com.google.common.collect.Maps;
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonWriter;
+import org.apache.commons.io.FileUtils;
 import org.deidentifier.arx.*;
 import org.deidentifier.arx.criteria.KAnonymity;
 import org.deidentifier.arx.criteria.LDiversity;
@@ -18,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import spark.Spark;
 
 import java.io.*;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
@@ -52,8 +54,8 @@ public class App {
         /**
          * Load a transformer by finding the optimal node using the input stored in the .deid file
          */
-        static ArxTransformer loadDeidFile(File f) throws Exception {
-            log.debug("Reading config file");
+        static ArxTransformer createFromDeid(File f) throws Exception {
+            log.info("Reading config file");
             WorkerLoad loader = new WorkerLoad(f, null);
             loader.run(new NullProgressMonitor());
             Model model = loader.getResult();
@@ -67,13 +69,14 @@ public class App {
             // stupid, need to release before we have locked anything?
             input.getHandle().release();
 
-            log.debug("Finding optimal node");
+            log.info("Finding optimal node");
             ARXResult r = anonymizer.anonymize(input, mc.getConfig());
             if (!r.isResultAvailable()) {
                 throw new RuntimeException("Unable to find optimal node");
             }
-            log.info("Arx preparation complete");
-            return new ArxTransformer(anonymizer, r.getGlobalOptimum(), input.getDefinition(), mc.getConfig());
+            ARXLattice.ARXNode globalOptimum = r.getGlobalOptimum();
+            log.info("Arx preparation complete, transformation is: {}", globalOptimum.getTransformation());
+            return new ArxTransformer(anonymizer, globalOptimum, input.getDefinition(), mc.getConfig());
         }
 
         public Map<String, Object> transform(Map<String, Object> in) throws IOException {
@@ -109,7 +112,6 @@ public class App {
             for (String key : entity.keySet()) {
                 if (!key.startsWith("_")) {
                     header.add(key);
-                    // TODO doesn't work with numeric values (and dates I guess)
                     value.add(String.valueOf(entity.get(key)));
                 }
             }
@@ -118,8 +120,15 @@ public class App {
     }
 
     public static void main(String[] args) throws Exception {
-        // TODO load file from url in a secure way
-        ArxTransformer transformer = ArxTransformer.loadDeidFile(new File("/home/baard/Downloads/example.deid"));
+        String deidUrl = System.getenv("DEID_URL");
+        if (deidUrl == null) {
+            throw new IllegalStateException("DEID_URL is required");
+        }
+        File tmpFile = File.createTempFile("deid", "foo");
+        log.info("Downloading configuration from: {}", deidUrl);
+        FileUtils.copyURLToFile(new URL(deidUrl), tmpFile);
+        log.info("Download complete");
+        ArxTransformer transformer = ArxTransformer.createFromDeid(tmpFile);
 
         Spark.post("/transform", (req, res) -> {
             res.type("application/json; charset=utf-8");
@@ -132,6 +141,7 @@ public class App {
                 jw.beginArray();
                 jr.beginArray();
                 while (jr.hasNext()) {
+                    // note that GSON will convert '55' to a double when we do it this way
                     Map<String,Object> input = new Gson().fromJson(jr, Map.class);
                     Map<String,Object> output = transformer.transform(input);
                     new Gson().toJson(output, Map.class, jw);
