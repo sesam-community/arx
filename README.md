@@ -1,12 +1,11 @@
-==============
-arx-anonymizer
-==============
+# arx-anonymizer
 
-Anonymizes entities using the Arx[1] tool.
+Anonymizes entities using the [Arx](http://arx.deidentifier.org/) tool.
 
-===================
-Workflow with Sesam
-===================
+[![Build Status](https://travis-ci.org/sesam-community/arx.svg?branch=master)](https://travis-ci.org/sesam-community/arx)
+
+
+## Workflow with Sesam
 
 1. Export the full dataset (or a representative sample) that you want to anonymize to CSV
 2. Import the CSV file into Arx
@@ -15,4 +14,19 @@ Workflow with Sesam
 5. Spin up this microservice and point it to the .deid file using env DEID_URL
 6. This microservice can be used as a http_transform to anonymize entities.
 
-[1] http://arx.deidentifier.org/
+## Example config
+
+```
+{
+  "_id": "arx",
+  "type": "system:microservice",
+  "docker": {
+    "environment": {
+      "DEBUG": "true",
+      "DEID_URL": "http://arx.deidentifier.org/?ddownload=2036"
+    },
+    "image": "sesamcommunity/arx",
+    "port": 4567
+  }
+}
+```
