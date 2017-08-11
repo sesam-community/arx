@@ -30,3 +30,7 @@ Anonymizes entities using the [Arx](http://arx.deidentifier.org/) tool.
   }
 }
 ```
+
+## Known issues
+
+There is currently no way to select which transform to use. The optimum node will always be picked.
