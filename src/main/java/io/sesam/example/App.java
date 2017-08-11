@@ -1,10 +1,7 @@
 package io.sesam.example;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.gson.Gson;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
 import org.apache.commons.io.FileUtils;
 import org.deidentifier.arx.*;
 import org.deidentifier.arx.criteria.KAnonymity;
@@ -20,10 +17,7 @@ import spark.Spark;
 
 import java.io.*;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class App {
     static boolean debug = Boolean.parseBoolean(System.getenv("DEBUG"));
@@ -34,12 +28,14 @@ public class App {
         final ARXLattice.ARXNode optimalNode;
         final DataDefinition input;
         final ARXConfiguration config;
+        final String[] header;
 
-        ArxTransformer(ARXAnonymizer anonymizer, ARXLattice.ARXNode optimalNode, DataDefinition input, ARXConfiguration config) {
+        ArxTransformer(ARXAnonymizer anonymizer, ARXLattice.ARXNode optimalNode, DataDefinition input, ARXConfiguration config, String[] header) {
             this.anonymizer = anonymizer;
             this.optimalNode = optimalNode;
             this.input = input;
             this.config = fixConfig(config);
+            this.header = header;
         }
 
         static ARXConfiguration fixConfig(ARXConfiguration original) {
@@ -75,52 +71,56 @@ public class App {
             if (!r.isResultAvailable()) {
                 throw new RuntimeException("Unable to find optimal node");
             }
+            String[] header = r.getOutput(false).iterator().next();
+            log.info("Schema attributes: ", header);
             ARXLattice.ARXNode globalOptimum = r.getGlobalOptimum();
-            log.info("Arx preparation complete, transformation is: {}", globalOptimum.getTransformation());
-            return new ArxTransformer(anonymizer, globalOptimum, input.getDefinition(), mc.getConfig());
+            log.info("Arx preparation complete, using transformation: {}", globalOptimum.getTransformation());
+            return new ArxTransformer(anonymizer, globalOptimum, input.getDefinition(), mc.getConfig(), header);
         }
 
-        public Map<String, Object> transform(Map<String, Object> in) throws IOException {
-            Map<String, Object> out = Maps.newHashMap();
-            out.put("_id", in.get("_id"));
-            Data data = convertToData(in);
+        ArrayList<Map<String,Object>> transform(ArrayList<Map<String, Object>> in) throws IOException {
+            return convertResult(anonymizer.anonymize(createData(in), config).getOutput(optimalNode, false));
+        }
 
-            // copy definition from "config"
-            data.getDefinition().read(input);
-
-            ARXResult r = anonymizer.anonymize(data, config);
-            DataHandle output = r.getOutput(optimalNode, false);
-            Iterator<String[]> i = output.iterator();
+        ArrayList<Map<String, Object>> convertResult(DataHandle result) {
+            Iterator<String[]> i = result.iterator();
             if (!i.hasNext()) {
                 throw new RuntimeException("Output is missing header row");
             }
-            String[] h = i.next();
-            if (!i.hasNext()) {
-                throw new RuntimeException("Output is missing value row");
-            }
-            String[] v = i.next();
-
-            for (int ix = 0; ix < h.length; ix++) {
-                out.put(h[ix], v[ix]);
+            String[] header = i.next();
+            ArrayList<Map<String,Object>> out = new ArrayList<>();
+            while (i.hasNext()) {
+                String[] v = i.next();
+                Map<String,Object> o = new LinkedHashMap<>();
+                for (int ix = 0; ix < header.length; ix++) {
+                    o.put(header[ix], v[ix]);
+                }
+                out.add(o);
             }
             return out;
         }
 
-        static Data convertToData(Map<String, Object> entity) {
-            // convert map to header and value row
-            ArrayList<String> header = Lists.newArrayList();
-            ArrayList<String> value = Lists.newArrayList();
-            for (String key : entity.keySet()) {
-                if (!key.startsWith("_")) {
-                    header.add(key);
-                    value.add(String.valueOf(entity.get(key)));
+        Data.DefaultData createData(ArrayList<Map<String, Object>> entities) {
+            Data.DefaultData data = Data.create();
+            data.add(header);
+            for (Map<String, Object> entity : entities) {
+                String[] row = new String[header.length];
+                for (int i = 0; i < header.length; i++) {
+                    // combination gson and String.valueOf might not work well for non-string types
+                    row[i] = String.valueOf(entity.get(header[i]));
                 }
+                data.add(row);
             }
-            return Data.create(new String[][] { header.toArray(new String[header.size()]), value.toArray(new String[header.size()])});
+            // copy definition from "config"
+            data.getDefinition().read(input);
+            return data;
         }
     }
 
     public static void main(String[] args) throws Exception {
+        if (debug) {
+            log.info("Debug logging enabled");
+        }
         String deidUrl = System.getenv("DEID_URL");
         if (deidUrl == null) {
             throw new IllegalStateException("DEID_URL is required");
@@ -133,32 +133,16 @@ public class App {
 
         Spark.post("/transform", (req, res) -> {
             res.type("application/json; charset=utf-8");
-
+            Gson gson = new Gson();
             try {
-                Writer w = new OutputStreamWriter(res.raw().getOutputStream(), "utf-8");
-                JsonWriter jw = new JsonWriter(w);
-                Reader r = new InputStreamReader(req.raw().getInputStream(), "utf-8");
-                JsonReader jr = new JsonReader(r);
-                jw.beginArray();
-                jr.beginArray();
-                while (jr.hasNext()) {
-                    // note that GSON will convert '55' to a double when we do it this way
-                    Map<String,Object> input = new Gson().fromJson(jr, Map.class);
-                    if (debug) {
-                        log.info("Got input: {}", input);
-                    }
-                    Map<String,Object> output = transformer.transform(input);
-                    new Gson().toJson(output, Map.class, jw);
-                }
-                jw.endArray();
-                jr.endArray();
-                jw.close();
-                jr.close();
+                ArrayList<Map<String,Object>> entities = Lists.newArrayList();
+                entities = gson.fromJson(new InputStreamReader(req.raw().getInputStream(), "utf-8"), entities.getClass());
+                return gson.toJson(transformer.transform(entities));
             } catch (Exception e) {
                 log.error("Got exception", e);
                 Spark.halt(500);
+                return "";
             }
-            return "";
         });
         Spark.init();
     }
