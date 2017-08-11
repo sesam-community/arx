@@ -79,23 +79,27 @@ public class App {
         }
 
         ArrayList<Map<String,Object>> transform(ArrayList<Map<String, Object>> in) throws IOException {
-            return convertResult(anonymizer.anonymize(createData(in), config).getOutput(optimalNode, false));
+            return convertResult(anonymizer.anonymize(createData(in), config).getOutput(optimalNode, false), in);
         }
 
-        ArrayList<Map<String, Object>> convertResult(DataHandle result) {
+        ArrayList<Map<String, Object>> convertResult(DataHandle result, ArrayList<Map<String, Object>> in) {
             Iterator<String[]> i = result.iterator();
             if (!i.hasNext()) {
                 throw new RuntimeException("Output is missing header row");
             }
             String[] header = i.next();
             ArrayList<Map<String,Object>> out = new ArrayList<>();
+            int rowId = 0;
             while (i.hasNext()) {
                 String[] v = i.next();
                 Map<String,Object> o = new LinkedHashMap<>();
                 for (int ix = 0; ix < header.length; ix++) {
+                    // assuming the output is ordered the same as the input (must be)
+                    o.put("_id", in.get(rowId).get("_id"));
                     o.put(header[ix], v[ix]);
                 }
                 out.add(o);
+                rowId++;
             }
             return out;
         }
