@@ -57,6 +57,9 @@ public class App {
             loader.run(new NullProgressMonitor());
             Model model = loader.getResult();
 
+            if (loader.getError() != null) {
+                throw loader.getError();
+            }
             // stupid, I guess the UI calls this method before user can click anonymize
             model.getBLikenessModel();
             ARXAnonymizer anonymizer = model.createAnonymizer();
