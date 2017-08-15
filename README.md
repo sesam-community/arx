@@ -36,3 +36,5 @@ Anonymizes entities using the [Arx](http://arx.deidentifier.org/) tool.
 There is currently no way to select which transform to use. The optimum node will always be picked.
 
 The optimum transform is based on the data stored in the .deid file, and additional data might produce another optimum transform. Therefore the training set should be updated on a regular basis.
+
+When anonymizing deltas, we remove the KAnonymity and LDiversity privacy criteria because they cannot be applied to a single row. The project need to include a least one more criteria in order to work. One way to do this is to select a subset of the input data in the Arx tool. This will include a Inclusion criteria and work.
